@@ -15,7 +15,7 @@
   GNU General Public License for more details.
 
   You should have received a copy of the GNU General Public License
-  along with Rospo.  If not, see <http://www.gnu.org/licenses/>.
+  along with InverterManager. If not, see <http://www.gnu.org/licenses/>.
 */
 
 // Outputs
@@ -26,14 +26,16 @@
 // Inputs
 #define ACSENSE PA1
 #define LOADSENSE PA4
+#define USERBUTTON PB15
 
 // Settings
 #define RUNCYCLES 1300
 
 bool ecoflowRunning;
-bool relaysOn;
 int confusionCount;
 int cycleCount;
+
+bool onDemandMode;
 
 void setup() {
   pinMode(RELAYCONTROL, OUTPUT);
@@ -43,8 +45,8 @@ void setup() {
   pinMode(ACSENSE, INPUT);
   digitalWrite( RELAYCONTROL, LOW );
   digitalWrite( BUTTONPUSHER, LOW );
+  onDemandMode = true;
   ecoflowRunning = false;
-  relaysOn = false;
   confusionCount = 0;
   sound_bootup();
 }
@@ -91,7 +93,16 @@ void sound_ascending() {
   tone(BUZZER, 500);
   delay(900);
   noTone(BUZZER);
+}
+
+void sound_descending() {
+  tone(BUZZER, 500);
   delay(900);
+  tone(BUZZER, 400);
+  delay(900);
+  tone(BUZZER, 300);
+  delay(900);
+  noTone(BUZZER);
 }
 
 void sound_sunshine() {
@@ -111,31 +122,61 @@ void sound_sunshine() {
   delay(900);
 }
 
+void activate()
+{
+  digitalWrite(BUTTONPUSHER, HIGH); // Activate DVH
+  digitalWrite(RELAYCONTROL, HIGH); // Switch relay to power load
+  ecoflowRunning = true;
+  confusionCount = 0;
+  delay(150);
+  digitalWrite(BUTTONPUSHER, LOW);
+  cycleCount = 0;
+  delay(500);
+}
+
+void deactivate()
+{
+  digitalWrite(RELAYCONTROL, LOW);
+  if(ecoflowRunning)
+  {
+      digitalWrite(BUTTONPUSHER, HIGH); // Activate DVH
+      delay(150);
+      digitalWrite(BUTTONPUSHER, LOW);
+      delay(500);
+  }
+  ecoflowRunning = false;
+  confusionCount = 0;
+  cycleCount = 0;
+}
+
+void confirmRunning()
+{
+  if(digitalRead(ACSENSE) == LOW)
+  {
+    if( ++confusionCount > 5 )
+    {
+      // panic
+      digitalWrite(RELAYCONTROL, LOW);
+      while(true)
+      {
+        sound_alarm();
+      }
+    } else {
+      // try again
+      digitalWrite(BUTTONPUSHER, HIGH); // Activate DVH
+      delay(150);
+      digitalWrite(BUTTONPUSHER, LOW);
+      tone(BUZZER,1000);
+      delay(1000);
+      noTone(BUZZER);
+    }
+  }
+}
+
 void runOnDemand() {
   if(ecoflowRunning)
   {
-      // Try to confirm it really is running
-      if(digitalRead(ACSENSE) == LOW)
-      {
-        if( ++confusionCount > 5 )
-        {
-          // panic
-          digitalWrite(RELAYCONTROL, LOW);
-          while(true)
-          {
-            sound_alarm();
-          }
-        } else {
-          // try again
-          digitalWrite(BUTTONPUSHER, HIGH); // Activate DVH
-          delay(150);
-          digitalWrite(BUTTONPUSHER, LOW);
-          tone(BUZZER,1000);
-          delay(1000);
-          noTone(BUZZER);
-        }
-        
-      }
+      confirmRunning();
 
       if(cycleCount++ > RUNCYCLES)
       {
@@ -148,9 +189,8 @@ void runOnDemand() {
           digitalWrite(RELAYCONTROL, HIGH);
           cycleCount = 0;
         } else {
-          // Keep inverter off
-          ecoflowRunning = false;
-          confusionCount = 0;
+          // Turn inverter off
+          deactivate();
         }
       } else {
         delay(100);
@@ -159,13 +199,7 @@ void runOnDemand() {
     // Check for load, and activate if necessary
     if( digitalRead(LOADSENSE) == HIGH )
     {
-      digitalWrite(BUTTONPUSHER, HIGH); // Activate DVH
-      digitalWrite(RELAYCONTROL, HIGH); // Switch relay to power load
-      ecoflowRunning = true;
-      confusionCount = 0;
-      delay(150);
-      digitalWrite(BUTTONPUSHER, LOW);
-      cycleCount = 0;
+      activate();
       sound_sunshine();
       delay(10);
     } else {
@@ -197,5 +231,30 @@ void runOnDemand() {
 
 void loop()
 {
-  runOnDemand();
+  // Run as appropriate
+  if( onDemandMode ) {
+    runOnDemand();
+  } else {
+    // Run continuously
+    confirmRunning();
+    tone(BUZZER,100);
+    confusionCount = 0;
+    delay(100);
+    noTone(BUZZER);
+    delay(500);
+  }
+
+  // Change mode if user pushes button
+  if( HIGH == digitalRead(USERBUTTON) )
+  {
+    onDemandMode = !onDemandMode;
+    if( false == onDemandMode && false == ecoflowRunning )
+    {
+      activate();
+      sound_sunshine();
+    } else {
+      deactivate();
+      sound_descending();
+    }
+  }
 }
