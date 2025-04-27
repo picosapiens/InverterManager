@@ -29,7 +29,9 @@
 #define USERBUTTON PB15
 
 // Settings
-#define RUNCYCLES 1300
+#define RUNCYCLES 1600
+#define BUTTONPUSHTIME 200
+#define ACTIVATIONDELAYTIME 1000
 
 bool ecoflowRunning;
 int confusionCount;
@@ -128,10 +130,10 @@ void activate()
   digitalWrite(RELAYCONTROL, HIGH); // Switch relay to power load
   ecoflowRunning = true;
   confusionCount = 0;
-  delay(150);
+  delay(BUTTONPUSHTIME);
   digitalWrite(BUTTONPUSHER, LOW);
   cycleCount = 0;
-  delay(500);
+  delay(ACTIVATIONDELAYTIME);
 }
 
 void deactivate()
@@ -140,9 +142,9 @@ void deactivate()
   if(ecoflowRunning)
   {
       digitalWrite(BUTTONPUSHER, HIGH); // Activate DVH
-      delay(150);
+      delay(BUTTONPUSHTIME);
       digitalWrite(BUTTONPUSHER, LOW);
-      delay(500);
+      delay(ACTIVATIONDELAYTIME);
   }
   ecoflowRunning = false;
   confusionCount = 0;
@@ -159,15 +161,15 @@ void confirmRunning()
       digitalWrite(RELAYCONTROL, LOW);
       while(true)
       {
-        sound_alarm();
+        sound_siren();
       }
     } else {
       // try again
       digitalWrite(BUTTONPUSHER, HIGH); // Activate DVH
-      delay(150);
+      delay(BUTTONPUSHTIME);
       digitalWrite(BUTTONPUSHER, LOW);
       tone(BUZZER,1000);
-      delay(1000);
+      delay(ACTIVATIONDELAYTIME+250);
       noTone(BUZZER);
     }
   }
@@ -212,15 +214,15 @@ void runOnDemand() {
           digitalWrite(RELAYCONTROL, LOW);
           while(true)
           {
-            sound_alarm();
+            sound_siren();
           }
         } else {
           // try again
           digitalWrite(BUTTONPUSHER, HIGH); // Activate DVH
-          delay(150);
+          delay(BUTTONPUSHTIME);
           digitalWrite(BUTTONPUSHER, LOW);
           tone(BUZZER,1000);
-          delay(1000);
+          delay(ACTIVATIONDELAYTIME+250);
           noTone(BUZZER);
         }
       }
@@ -239,7 +241,7 @@ void loop()
     confirmRunning();
     tone(BUZZER,100);
     confusionCount = 0;
-    delay(100);
+    delay(150);
     noTone(BUZZER);
     delay(500);
   }
@@ -251,8 +253,10 @@ void loop()
     if( false == onDemandMode && false == ecoflowRunning )
     {
       activate();
-      sound_sunshine();
-    } else {
+      sound_ascending();
+    }
+    if( true == onDemandMode )
+    {
       deactivate();
       sound_descending();
     }
